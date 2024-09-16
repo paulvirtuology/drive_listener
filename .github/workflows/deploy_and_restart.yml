@@ -15,8 +15,9 @@ jobs:
 
       - name: Set up SSH
         uses: webfactory/ssh-agent@v0.7.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+        ssh-passphrase: ${{ secrets.SSH_PASSPHRASE }}
 
       - name: Deploy and Restart Application
         run: |
@@ -30,3 +31,4 @@ jobs:
             # Run the script in the background
             nohup /home/paul_smartelia/drive_listener/venv/bin/python3 /home/paul_smartelia/drive_listener/main.py > drive_listener.log 2>&1 &
           EOF
+
