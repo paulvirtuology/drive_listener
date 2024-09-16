@@ -21,7 +21,7 @@ jobs:
 
       - name: Deploy and Restart Application
         run: |
-          ssh -o StrictHostKeyChecking=no paul_smartelia@<server_ip> << 'EOF'
+          ssh -o StrictHostKeyChecking=no paul_smartelia@34.68.135.226 << 'EOF'
             # Navigate to the script directory
             cd /home/paul_smartelia/drive_listener
             # Activate the virtual environment
