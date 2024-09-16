@@ -1,0 +1,32 @@
+name: Deploy and Restart App
+
+on:
+  push:
+    branches:
+      - main  # Change this to the branch you want to listen to
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Deploy and Restart Application
+        run: |
+          ssh -o StrictHostKeyChecking=no paul_smartelia@<server_ip> << 'EOF'
+            # Navigate to the script directory
+            cd /home/paul_smartelia/drive_listener
+            # Activate the virtual environment
+            source /home/paul_smartelia/drive_listener/venv/bin/activate
+            # Kill the running script, if any
+            pkill -f main.py || true
+            # Run the script in the background
+            nohup /home/paul_smartelia/drive_listener/venv/bin/python3 /home/paul_smartelia/drive_listener/main.py > drive_listener.log 2>&1 &
+          EOF
