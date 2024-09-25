@@ -16,6 +16,9 @@ SCOPES = ['https://www.googleapis.com/auth/drive']
 # Folder ID for the specific folder to monitor
 FOLDER_ID = '1zxrkg0Ug5po-njoqu9ULiJuDMT7PXUg-'
 
+# Set to keep track of processed file IDs
+processed_file_ids = set()
+
 def authenticate():
     logging.info("Authenticating...")
     creds = None
@@ -56,8 +59,30 @@ def check_file_exists(service, folder_id, file_name):
     items = results.get('files', [])
     return len(items) > 0  # Returns True if duplicates exist
 
-def copy_and_remove_file(service, file_id, file_name):
+def check_file_ownership(service, file_id, user_email):
+    """Check if the file is owned by the specified user."""
     try:
+        file_metadata = service.files().get(fileId=file_id, fields='owners').execute()
+        owners = file_metadata.get('owners', [])
+        for owner in owners:
+            if owner.get('emailAddress') == user_email:
+                return True  # The user is an owner of the file
+    except Exception as e:
+        logging.error(f"Error checking file ownership: {e}")
+    return False  # The user is not an owner
+
+def copy_and_remove_file(service, file_id, file_name, user_email):
+    try:
+        # Check if this file has already been processed
+        if file_id in processed_file_ids:
+            logging.info(f"File {file_name} (ID: {file_id}) has already been processed. Skipping.")
+            return
+        
+        # Check if the owner of the file is this user
+        if check_file_ownership(service, file_id, user_email):
+            logging.info(f"You are the owner of {file_name}. Skipping copy.")
+            return
+        
         # Check if a file with the same name already exists in the target folder
         if check_file_exists(service, FOLDER_ID, file_name):
             logging.info(f"Duplicate file {file_name} already exists. Skipping copy.")
@@ -67,6 +92,9 @@ def copy_and_remove_file(service, file_id, file_name):
         copied_file = service.files().copy(fileId=file_id, body={'name': file_name}).execute()
         logging.info(f"Copied file: {file_name} with new ID: {copied_file['id']}")
         
+        # Mark this file ID as processed
+        processed_file_ids.add(file_id)
+
         # Delete original only after successful copy
         service.files().delete(fileId=file_id).execute()
         logging.info(f"Deleted original file: {file_name}.")
@@ -74,7 +102,7 @@ def copy_and_remove_file(service, file_id, file_name):
     except Exception as e:
         logging.error(f"Error copying and removing file: {e}")
 
-def list_changes(service, start_page_token):
+def list_changes(service, start_page_token, user_email):
     try:
         logging.info("Fetching changes...")
         results = service.changes().list(
@@ -93,9 +121,10 @@ def list_changes(service, start_page_token):
                     file_id = change['file']['id']
                     file_info = service.files().get(fileId=file_id, fields='id, name, parents').execute()
                     if is_in_folder(service, file_id, FOLDER_ID):
-                        copy_and_remove_file(service, file_id, file_info['name'])
+                        copy_and_remove_file(service, file_id, file_info['name'], user_email)
                     else:
                         logging.info(f"File {file_info['name']} is not in the specified folder. Skipping...")
+        
         else:
             logging.info('No changes found.')
         
@@ -110,13 +139,16 @@ def main():
     response = service.changes().getStartPageToken().execute()
     start_page_token = response.get('startPageToken')
     
+    user_email = 'YOUR_EMAIL@example.com'  # Replace with your email address
+    
     while True:
         try:
-            new_start_page_token = list_changes(service, start_page_token)
+            new_start_page_token = list_changes(service, start_page_token, user_email)
             if new_start_page_token:
                 start_page_token = new_start_page_token
             
-            time.sleep(10)
+            time.sleep(10)  # Sleep to avoid rapid polling
+            
         except Exception as error:
             logging.error(f'Error in main loop: {error}')
             time.sleep(10)
